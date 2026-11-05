@@ -1,0 +1,696 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>سلة البستان 2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lalezar&family=Readex+Pro:wght@400;600&display=swap">
+<style>
+  /* Layout: one-screen arcade cabinet — HUD strip on top, orchard stage, touch pad and key hints below. Single dusk-orchard look. */
+  :root {
+    --night: #13241f;      /* page ground, deep orchard green */
+    --leaf: #1d3a31;       /* stage sky top */
+    --dusk: #2e5446;       /* stage sky bottom */
+    --lantern: #f2b84b;    /* accent: warm lantern light */
+    --cream: #f6ecd6;      /* text */
+    --muted: #a9bfb2;      /* secondary text */
+    --berry: #e2574c;      /* hearts / misses */
+    --display: "Lalezar", "Readex Pro", system-ui, sans-serif;
+    --body: "Readex Pro", "Segoe UI", Tahoma, system-ui, sans-serif;
+    color-scheme: dark;
+  }
+  body {
+    margin: 0;
+    background: var(--night);
+    color: var(--cream);
+    font-family: var(--body);
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 12px;
+    box-sizing: border-box;
+  }
+  [hidden] { display: none !important; }
+  .app {
+    max-width: 720px;
+    margin-inline: auto;
+    display: grid;
+    gap: 10px;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px 12px;
+    flex-wrap: wrap;
+  }
+  h1 {
+    font-family: var(--display);
+    font-weight: 400;
+    font-size: clamp(26px, 6vw, 36px);
+    line-height: 1;
+    margin: 0;
+    color: var(--lantern);
+  }
+  h1 sup { font-size: 0.55em; color: var(--cream); margin-inline-start: 2px; }
+  .hud { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .chip {
+    display: flex; align-items: baseline; gap: 8px;
+    background: rgba(246, 236, 214, 0.07);
+    border: 1px solid rgba(246, 236, 214, 0.14);
+    border-radius: 999px;
+    padding: 6px 12px;
+  }
+  .chip .label { font-size: 12px; color: var(--muted); letter-spacing: 0.02em; }
+  .chip .val {
+    font-family: var(--display);
+    font-size: 24px; line-height: 1;
+    font-variant-numeric: tabular-nums;
+    color: var(--cream);
+    min-width: 2ch; text-align: center;
+  }
+  #levelChip .val { color: var(--lantern); }
+  .hearts { font-size: 16px; letter-spacing: 1px; line-height: 1; }
+  .hearts .lost { filter: grayscale(1); opacity: 0.3; }
+  .chip.hit { animation: shake 0.35s; border-color: var(--berry); }
+  .chip.up { animation: pop 0.5s; border-color: var(--lantern); }
+  @keyframes shake {
+    25% { transform: translateX(-4px); } 50% { transform: translateX(4px); } 75% { transform: translateX(-2px); }
+  }
+  @keyframes pop { 40% { transform: scale(1.18); } }
+  .sound {
+    font-family: var(--body);
+    font-size: 18px;
+    line-height: 1;
+    padding: 7px 10px;
+    border-radius: 999px;
+    background: rgba(246, 236, 214, 0.07);
+    border: 1px solid rgba(246, 236, 214, 0.14);
+    box-shadow: none;
+    color: var(--cream);
+  }
+  .sound:active { transform: none; box-shadow: none; }
+
+  .stage {
+    position: relative;
+    height: 62vh;
+    height: clamp(320px, 62svh, 620px);
+    -webkit-user-select: none; user-select: none;
+    -webkit-touch-callout: none;
+    border-radius: 18px;
+    overflow: hidden;
+    background: linear-gradient(var(--leaf), var(--dusk));
+    border: 1px solid rgba(242, 184, 75, 0.25);
+    touch-action: none;
+  }
+  canvas { display: block; width: 100%; height: 100%; }
+
+  .overlay {
+    position: absolute; inset: 0;
+    display: grid; place-items: center;
+    background: rgba(19, 36, 31, 0.72);
+    backdrop-filter: blur(2px);
+    text-align: center;
+    padding: 20px;
+  }
+  .card { display: grid; gap: 12px; justify-items: center; max-width: 34ch; }
+  .card .big { font-size: 56px; line-height: 1; }
+  .card h2 {
+    font-family: var(--display); font-weight: 400;
+    font-size: clamp(30px, 7vw, 44px); line-height: 1.1;
+    margin: 0; color: var(--lantern); text-wrap: balance;
+  }
+  .card p { margin: 0; color: var(--muted); line-height: 1.7; }
+  .card .score-line { color: var(--cream); font-size: 18px; }
+  .card .score-line b { font-family: var(--display); font-weight: 400; font-size: 28px; color: var(--lantern); }
+  .rules { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; color: var(--muted); line-height: 1.6; font-size: 14px; }
+  .rules b { color: var(--cream); font-weight: 600; }
+  button {
+    font-family: var(--display);
+    font-size: 22px;
+    background: var(--lantern);
+    color: var(--night);
+    border: 0;
+    border-radius: 14px;
+    padding: 10px 28px;
+    cursor: pointer;
+    box-shadow: 0 4px 0 #b9832a;
+    transition: transform 0.08s, box-shadow 0.08s;
+  }
+  button:active { transform: translateY(3px); box-shadow: 0 1px 0 #b9832a; }
+  button:focus-visible { outline: 3px solid var(--cream); outline-offset: 3px; }
+
+  .pad { display: none; gap: 10px; }
+  .pad button {
+    flex: 1;
+    font-size: 30px;
+    padding: 14px 0;
+    touch-action: none;
+    -webkit-user-select: none; user-select: none;
+  }
+  .pad button.on { transform: translateY(3px); box-shadow: 0 1px 0 #b9832a; }
+  @media (pointer: coarse) {
+    .pad { display: flex; }
+    .desk { display: none; }
+  }
+  footer {
+    display: flex; flex-wrap: wrap; gap: 6px 16px; justify-content: center;
+    font-size: 13px; color: var(--muted);
+  }
+  kbd {
+    font-family: var(--body);
+    font-size: 12px;
+    border: 1px solid rgba(246, 236, 214, 0.25);
+    border-bottom-width: 2px;
+    border-radius: 6px;
+    padding: 1px 6px;
+    color: var(--cream);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .chip.hit, .chip.up { animation: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app" dir="rtl">
+  <header>
+    <h1>سلة البستان<sup>2</sup></h1>
+    <div class="hud">
+      <div class="chip" id="levelChip"><span class="label">المستوى</span><span class="val" id="level">1</span></div>
+      <div class="chip" id="scoreChip"><span class="label">النقاط</span><span class="val" id="score">0</span></div>
+      <div class="chip" id="livesChip"><span class="label">المحاولات</span><span class="hearts" id="hearts"><span>❤️</span><span>❤️</span><span>❤️</span><span>❤️</span><span>❤️</span></span></div>
+      <button class="sound" id="soundBtn" type="button" aria-label="كتم الصوت">🔊</button>
+    </div>
+  </header>
+
+  <div class="stage" id="stage">
+    <canvas id="cv"></canvas>
+
+    <div class="overlay" id="startScreen">
+      <div class="card">
+        <div class="big">🧺</div>
+        <h2>التقط الفاكهة قبل أن تسقط</h2>
+        <ul class="rules">
+          <li>كل ثمرة = <b>نقطة واحدة</b></li>
+          <li>النجمة الصفراء ⭐ = <b>5 نقاط</b></li>
+          <li>كل 10 نقاط = <b>مستوى أصعب</b></li>
+          <li>عندك <b>5 محاولات</b> قبل نهاية اللعبة</li>
+        </ul>
+        <button id="startBtn" type="button">ابدأ اللعب</button>
+      </div>
+    </div>
+
+    <div class="overlay" id="overScreen" hidden>
+      <div class="card">
+        <div class="big">🍂</div>
+        <h2>انتهت اللعبة</h2>
+        <div class="score-line">نتيجتك: <b id="finalScore">0</b></div>
+        <p id="levelLine"></p>
+        <p id="bestLine"></p>
+        <button id="againBtn" type="button">العب مرة أخرى</button>
+      </div>
+    </div>
+
+    <div class="overlay" id="pauseScreen" hidden>
+      <div class="card">
+        <h2>متوقفة مؤقتًا</h2>
+        <p class="desk">اضغط <kbd>P</kbd> أو <kbd>Esc</kbd> للمتابعة</p>
+        <button id="resumeBtn" type="button">متابعة</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="pad" dir="ltr">
+    <button id="padLeft" type="button" aria-label="يسار">◀</button>
+    <button id="padRight" type="button" aria-label="يمين">▶</button>
+  </div>
+
+
+
+  <footer>
+    <span class="desk"><kbd>→</kbd> <kbd>←</kbd> أو <kbd>A</kbd> <kbd>D</kbd> لتحريك السلة</span>
+    <span class="desk"><kbd>Space</kbd> للبدء</span>
+    <span class="desk"><kbd>P</kbd> إيقاف مؤقت</span>
+    <span class="desk"><kbd>M</kbd> كتم الصوت</span>
+    <span>على الجوال: اسحب السلة بإصبعك أو استخدم الزرين</span>
+  </footer>
+</div>
+
+<script>
+(() => {
+  const FRUITS = ['🍎','🍊','🍋','🍐','🍑','🍒','🍓','🍇','🥝','🍌','🥭','🍍'];
+  const MAX_LIVES = 5;
+  const POINTS_PER_LEVEL = 10;
+  const GOLD_CHANCE = 0.08;   // about 1 in 12 drops is a golden star
+  const GOLD_POINTS = 5;
+
+  const stage = document.getElementById('stage');
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+  const scoreEl = document.getElementById('score');
+  const levelEl = document.getElementById('level');
+  const heartsEl = document.getElementById('hearts');
+  const livesChip = document.getElementById('livesChip');
+  const levelChip = document.getElementById('levelChip');
+  const soundBtn = document.getElementById('soundBtn');
+  const startScreen = document.getElementById('startScreen');
+  const overScreen = document.getElementById('overScreen');
+  const pauseScreen = document.getElementById('pauseScreen');
+  const finalScoreEl = document.getElementById('finalScore');
+  const levelLine = document.getElementById('levelLine');
+  const bestLine = document.getElementById('bestLine');
+
+  let W = 0, H = 0, dpr = 1, size = 40;
+  let state = 'ready'; // ready | play | pause | over
+  let score = 0, lives = MAX_LIVES, level = 1;
+  let items = [], effects = [];
+  let spawnTimer = 0, clock = 0;
+  const keys = { left: false, right: false };
+  let pointerX = null;
+  const basket = { x: 0, w: 0 };
+
+  let best = 0;
+  try { best = Number(localStorage.getItem('orchard-best-v2')) || 0; } catch (e) {}
+
+  // ---------- sound (synthesized, no files needed) ----------
+  let audio = null, out = null, crashBus = null;
+  let muted = false;
+  try { muted = localStorage.getItem('orchard-muted') === '1'; } catch (e) {}
+
+  function unlockAudio() {
+    // iPhone: play game sound even when the side silent switch is on (Safari 17+)
+    try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {}
+    if (audio) { if (audio.state === 'suspended') audio.resume(); return; }
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    audio = new AC();
+    if (audio.state === 'suspended') audio.resume();
+    // a compressor lets the big impact sound be loud without crackling
+    out = audio.createDynamicsCompressor();
+    out.threshold.value = -20;
+    out.knee.value = 10;
+    out.ratio.value = 8;
+    // master boost after the compressor, so loud sounds get louder without clipping
+    const boost = audio.createGain();
+    boost.gain.value = 1.8;
+    out.connect(boost).connect(audio.destination);
+    // the ground-hit sound goes through its own distortion + gain, so it cuts through even on small phone speakers
+    const shaper = audio.createWaveShaper();
+    const curve = new Float32Array(1024);
+    for (let i = 0; i < 1024; i++) { const x = i / 512 - 1; curve[i] = Math.tanh(x * 4); }
+    shaper.curve = curve;
+    crashBus = audio.createGain();
+    crashBus.gain.value = 2.2;
+    crashBus.connect(shaper).connect(out);
+  }
+  function tone(freq, start, dur, type = 'sine', vol = 0.18, slideTo = null, dest = null) {
+    if (!audio || muted) return;
+    const t0 = audio.currentTime + start;
+    const osc = audio.createOscillator();
+    const gain = audio.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t0);
+    if (slideTo) osc.frequency.exponentialRampToValueAtTime(slideTo, t0 + dur);
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.exponentialRampToValueAtTime(vol, t0 + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    osc.connect(gain).connect(dest || out);
+    osc.start(t0);
+    osc.stop(t0 + dur + 0.02);
+  }
+  // short burst of filtered noise: the "thump" of fruit hitting the ground
+  function noise(start, dur, vol = 0.4, cutoff = 900, dest = null) {
+    if (!audio || muted) return;
+    const t0 = audio.currentTime + start;
+    const len = Math.floor(audio.sampleRate * dur);
+    const buf = audio.createBuffer(1, len, audio.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+    const src = audio.createBufferSource();
+    src.buffer = buf;
+    const filter = audio.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(cutoff, t0);
+    filter.frequency.exponentialRampToValueAtTime(80, t0 + dur);
+    const gain = audio.createGain();
+    gain.gain.setValueAtTime(vol, t0);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    src.connect(filter).connect(gain).connect(dest || out);
+    src.start(t0);
+    src.stop(t0 + dur + 0.02);
+  }
+  const sfx = {
+    catch: () => tone(660, 0, 0.12, 'triangle', 0.11, 990),
+    gold:  () => [784, 988, 1319, 1568].forEach((f, i) => tone(f, i * 0.06, 0.16, 'triangle', 0.1)),
+    // explosion: long roaring blast + sub boom + random crackles
+    miss:  () => {
+      tone(110, 0, 1.1, 'sine', 1.0, 28, crashBus);
+      tone(60, 0, 1.3, 'triangle', 0.9, 25, crashBus);
+      tone(300, 0, 0.35, 'sawtooth', 0.5, 60, crashBus);
+      noise(0, 1.4, 1.0, 3500, crashBus);
+      for (let i = 0; i < 6; i++) noise(0.05 + Math.random() * 0.5, 0.06, 0.6, 4000, crashBus);
+    },
+    level: () => [523, 659, 784, 1047].forEach((f, i) => tone(f, i * 0.09, 0.22, 'square', 0.04)),
+    over:  () => [392, 330, 262, 196].forEach((f, i) => tone(f, i * 0.18, 0.3, 'triangle', 0.09)),
+  };
+  function renderSound() {
+    soundBtn.textContent = muted ? '🔇' : '🔊';
+    soundBtn.setAttribute('aria-label', muted ? 'تشغيل الصوت' : 'كتم الصوت');
+  }
+  function toggleSound() {
+    muted = !muted;
+    try { localStorage.setItem('orchard-muted', muted ? '1' : '0'); } catch (e) {}
+    unlockAudio();
+    renderSound();
+  }
+
+  // ---------- layout ----------
+  function resize() {
+    const r = stage.getBoundingClientRect();
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = r.width; H = r.height;
+    cv.width = Math.round(W * dpr);
+    cv.height = Math.round(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    size = Math.max(28, Math.min(48, W * 0.075));
+    basket.w = size * 1.9;
+    if (!basket.x) basket.x = W / 2;
+    basket.x = clamp(basket.x, basket.w / 2, W - basket.w / 2);
+  }
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const bump = (el, cls) => { el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); };
+
+  function renderHud() {
+    scoreEl.textContent = score;
+    levelEl.textContent = level;
+    let h = '';
+    for (let i = 0; i < MAX_LIVES; i++) h += `<span class="${i < lives ? '' : 'lost'}">❤️</span>`;
+    heartsEl.innerHTML = h;
+  }
+
+  // ---------- game flow ----------
+  function start() {
+    unlockAudio();
+    score = 0; lives = MAX_LIVES; level = 1;
+    items = []; effects = [];
+    spawnTimer = 0.4;
+    basket.x = W / 2;
+    state = 'play';
+    startScreen.hidden = true;
+    overScreen.hidden = true;
+    pauseScreen.hidden = true;
+    renderHud();
+  }
+
+  function gameOver() {
+    state = 'over';
+    pauseScreen.hidden = true;
+    sfx.over();
+    if (score > best) {
+      best = score;
+      try { localStorage.setItem('orchard-best-v2', String(best)); } catch (e) {}
+      bestLine.textContent = 'رقم قياسي جديد! 🎉';
+    } else {
+      bestLine.textContent = `أفضل نتيجة لك: ${best}`;
+    }
+    finalScoreEl.textContent = score;
+    levelLine.textContent = `وصلت إلى المستوى ${level}`;
+    overScreen.hidden = false;
+    document.getElementById('againBtn').focus();
+  }
+
+  function togglePause() {
+    if (state === 'play') { state = 'pause'; pauseScreen.hidden = false; }
+    else if (state === 'pause') { state = 'play'; pauseScreen.hidden = true; }
+  }
+
+  function addPoints(n) {
+    score += n;
+    const newLevel = 1 + Math.floor(score / POINTS_PER_LEVEL);
+    if (newLevel > level) {
+      level = newLevel;
+      effects.push({ kind: 'level', t: 0, life: 1.6 });
+      bump(levelChip, 'up');
+      sfx.level();
+    }
+    renderHud();
+  }
+
+  // Difficulty rises with each level: faster falls, shorter gaps between fruit.
+  const fallSpeed = () => H * Math.min(0.32 + (level - 1) * 0.07, 1.05);
+  const spawnGap = () => Math.max(0.38, 1.15 - (level - 1) * 0.1);
+
+  // try a few random spots and keep the first one whose column is clear in the upper part of the stage,
+  // so a faster item cannot catch up with a slower one in the same column
+  function freeX() {
+    const gap = size * 1.4;
+    let x = 0;
+    for (let tries = 0; tries < 12; tries++) {
+      x = size / 2 + Math.random() * (W - size);
+      if (!items.some(o => o.y < H * 0.6 && Math.abs(o.x - x) < gap)) return x;
+    }
+    return x;
+  }
+
+  function spawn() {
+    const gold = Math.random() < GOLD_CHANCE;
+    items.push({
+      x: freeX(),
+      y: -size,
+      vy: fallSpeed() * (0.85 + Math.random() * 0.3) * (gold ? 1.15 : 1),
+      emoji: gold ? '⭐' : FRUITS[Math.floor(Math.random() * FRUITS.length)],
+      gold,
+      rot: Math.random() * 0.6 - 0.3,
+      vr: gold ? 3 : (Math.random() - 0.5) * 2,   // stars spin
+    });
+  }
+
+  function update(dt) {
+    clock += dt;
+
+    // basket movement
+    const speed = W * 1.1;
+    if (keys.left) basket.x -= speed * dt;
+    if (keys.right) basket.x += speed * dt;
+    if (pointerX !== null) basket.x += (pointerX - basket.x) * Math.min(1, dt * 18);
+    basket.x = clamp(basket.x, basket.w / 2, W - basket.w / 2);
+
+    spawnTimer -= dt;
+    if (spawnTimer <= 0) { spawn(); spawnTimer = spawnGap(); }
+
+    const basketTop = H - size * 1.35;
+    const groundY = H - size * 0.2;
+
+    for (let i = items.length - 1; i >= 0; i--) {
+      const it = items[i];
+      const prevY = it.y;
+      it.y += it.vy * dt;
+      it.rot += it.vr * dt;
+
+      // caught: crossed the basket rim while horizontally inside it
+      if (prevY < basketTop && it.y >= basketTop && Math.abs(it.x - basket.x) < basket.w / 2 + size * 0.15) {
+        items.splice(i, 1);
+        const pts = it.gold ? GOLD_POINTS : 1;
+        effects.push({ kind: 'plus', x: it.x, y: basketTop - size * 0.3, t: 0, life: it.gold ? 1.1 : 0.8, pts, gold: it.gold });
+        if (it.gold) { sfx.gold(); bump(document.getElementById('scoreChip'), 'up'); } else sfx.catch();
+        addPoints(pts);
+        continue;
+      }
+      // missed: hit the ground
+      if (it.y >= groundY) {
+        items.splice(i, 1);
+        lives--;
+        effects.push({ kind: 'splat', x: it.x, y: groundY, t: 0, life: 0.8, emoji: it.emoji });
+        renderHud();
+        bump(livesChip, 'hit');
+        if (lives <= 0) { gameOver(); return; }
+        sfx.miss();
+      }
+    }
+
+    for (let i = effects.length - 1; i >= 0; i--) {
+      effects[i].t += dt;
+      if (effects[i].t > effects[i].life) effects.splice(i, 1);
+    }
+  }
+
+  // ---------- drawing ----------
+  function drawBackground() {
+    // distant tree silhouettes
+    ctx.fillStyle = 'rgba(19, 36, 31, 0.55)';
+    const n = Math.ceil(W / 120) + 1;
+    for (let i = 0; i < n; i++) {
+      const cx = i * 120 + 40, r = 46 + (i % 3) * 12;
+      ctx.beginPath();
+      ctx.arc(cx, H - size * 0.2 - r * 0.6, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // ground
+    ctx.fillStyle = '#13241f';
+    ctx.fillRect(0, H - size * 0.2, W, size * 0.2);
+    ctx.fillStyle = 'rgba(242, 184, 75, 0.35)';
+    ctx.fillRect(0, H - size * 0.2, W, 1);
+  }
+
+  function drawGoldHalo(x, y) {
+    const pulse = 0.85 + Math.sin(clock * 8) * 0.15;
+    const r = size * 1.25 * pulse;
+    const g = ctx.createRadialGradient(x, y, 2, x, y, r);
+    g.addColorStop(0, 'rgba(255, 214, 90, 0.85)');
+    g.addColorStop(0.5, 'rgba(242, 184, 75, 0.35)');
+    g.addColorStop(1, 'rgba(242, 184, 75, 0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    drawBackground();
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    // splats behind fruit
+    for (const e of effects) {
+      if (e.kind !== 'splat') continue;
+      ctx.globalAlpha = 1 - e.t / e.life;
+      ctx.font = `${size * 0.9}px serif`;
+      ctx.save();
+      ctx.translate(e.x, e.y - size * 0.25);
+      ctx.scale(1 + e.t * 0.6, Math.max(0.2, 1 - e.t * 1.1));
+      ctx.fillText(e.emoji, 0, 0);
+      ctx.restore();
+      ctx.font = `${size * 0.5}px serif`;
+      ctx.fillText('💥', e.x, e.y - size * 0.6 - e.t * 20);
+      ctx.globalAlpha = 1;
+    }
+
+    // falling fruit, stars last so they are always drawn on top
+    const ordered = items.filter(it => !it.gold).concat(items.filter(it => it.gold));
+    for (const it of ordered) {
+      if (it.gold) drawGoldHalo(it.x, it.y);
+      ctx.font = `${size * (it.gold ? 1.3 : 1)}px serif`;
+      ctx.save();
+      ctx.translate(it.x, it.y);
+      ctx.rotate(it.rot);
+      ctx.fillText(it.emoji, 0, 0);
+      ctx.restore();
+      if (it.gold) {
+        ctx.font = `${size * 0.45}px serif`;
+        ctx.globalAlpha = 0.6 + Math.sin(clock * 10) * 0.4;   // twinkle
+        ctx.fillText('✨', it.x + size * 0.6, it.y - size * 0.6);
+        ctx.fillText('✨', it.x - size * 0.6, it.y + size * 0.4);
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    // lantern glow under basket + basket
+    const by = H - size * 0.85;
+    const g = ctx.createRadialGradient(basket.x, by, 4, basket.x, by, basket.w);
+    g.addColorStop(0, 'rgba(242, 184, 75, 0.28)');
+    g.addColorStop(1, 'rgba(242, 184, 75, 0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(basket.x - basket.w, by - basket.w, basket.w * 2, basket.w * 2);
+    ctx.font = `${size * 1.7}px serif`;
+    ctx.fillText('🧺', basket.x, by);
+
+    // +1 / +5 popups
+    for (const e of effects) {
+      if (e.kind !== 'plus') continue;
+      ctx.globalAlpha = 1 - e.t / e.life;
+      ctx.font = `${size * (e.gold ? 0.95 : 0.6)}px Lalezar, "Readex Pro", sans-serif`;
+      ctx.fillStyle = e.gold ? '#ffd65a' : '#f2b84b';
+      ctx.fillText(`+${e.pts}`, e.x, e.y - e.t * 50);
+      ctx.globalAlpha = 1;
+    }
+
+    // level-up banner
+    for (const e of effects) {
+      if (e.kind !== 'level') continue;
+      const p = e.t / e.life;
+      ctx.globalAlpha = p < 0.15 ? p / 0.15 : 1 - Math.max(0, (p - 0.6) / 0.4);
+      ctx.font = `${Math.min(64, W * 0.13)}px Lalezar, "Readex Pro", sans-serif`;
+      ctx.fillStyle = '#f2b84b';
+      ctx.fillText(`المستوى ${level}`, W / 2, H * 0.38 - p * 20);
+      ctx.font = `${Math.min(20, W * 0.045)}px "Readex Pro", sans-serif`;
+      ctx.fillStyle = '#f6ecd6';
+      ctx.fillText('الفواكه أسرع الآن!', W / 2, H * 0.38 + Math.min(48, W * 0.1) - p * 20);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  let last = performance.now();
+  function loop(now) {
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    if (state === 'play') update(dt);
+    else clock += dt;
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  // ---------- input ----------
+  const LEFT = ['ArrowLeft', 'a', 'A', 'ش'];
+  const RIGHT = ['ArrowRight', 'd', 'D', 'ي'];
+  window.addEventListener('keydown', (e) => {
+    if (LEFT.includes(e.key)) { keys.left = true; pointerX = null; e.preventDefault(); }
+    else if (RIGHT.includes(e.key)) { keys.right = true; pointerX = null; e.preventDefault(); }
+    else if (e.key === ' ' || e.key === 'Enter') {
+      if (state === 'ready' || state === 'over') { e.preventDefault(); start(); }
+    } else if (e.key === 'p' || e.key === 'P' || e.key === 'Escape' || e.key === 'ح') {
+      togglePause();
+    } else if (e.key === 'm' || e.key === 'M' || e.key === 'ة') {
+      toggleSound();
+    }
+  });
+  window.addEventListener('keyup', (e) => {
+    if (LEFT.includes(e.key)) keys.left = false;
+    if (RIGHT.includes(e.key)) keys.right = false;
+  });
+  window.addEventListener('blur', () => { keys.left = keys.right = false; });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && state === 'play') togglePause();
+  });
+
+  // touch / mouse drag
+  const toLocal = (e) => e.clientX - stage.getBoundingClientRect().left;
+  stage.addEventListener('pointerdown', (e) => {
+    if (state !== 'play') return;
+    pointerX = toLocal(e);
+    try { stage.setPointerCapture(e.pointerId); } catch (err) {}
+  });
+  stage.addEventListener('pointermove', (e) => { if (state === 'play' && (e.buttons || e.pointerType === 'touch')) pointerX = toLocal(e); });
+  window.addEventListener('pointerup', () => { pointerX = null; });
+  window.addEventListener('pointercancel', () => { pointerX = null; });
+
+  // on-screen buttons for phones
+  const bindPad = (id, dir) => {
+    const b = document.getElementById(id);
+    const on = (e) => { e.preventDefault(); keys[dir] = true; pointerX = null; b.classList.add('on'); };
+    const off = () => { keys[dir] = false; b.classList.remove('on'); };
+    b.addEventListener('pointerdown', on);
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => b.addEventListener(ev, off));
+    b.addEventListener('contextmenu', (e) => e.preventDefault());
+  };
+  bindPad('padLeft', 'left');
+  bindPad('padRight', 'right');
+
+  document.getElementById('startBtn').addEventListener('click', start);
+  document.getElementById('againBtn').addEventListener('click', start);
+  document.getElementById('resumeBtn').addEventListener('click', togglePause);
+  soundBtn.addEventListener('click', toggleSound);
+
+  renderSound();
+  renderHud();
+  resize();
+  if (window.ResizeObserver) new ResizeObserver(resize).observe(stage);
+  else window.addEventListener('resize', resize);
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
